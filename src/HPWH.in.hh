@@ -349,7 +349,8 @@ class HPWH {
   HEATSOURCE_TYPE getNthHeatSourceType(int N) const;
   /**< returns the enum value for what type of heat source the Nth heat source is  */
 
-
+  void setControllerAddress(HPWH *controller); 
+  /**< Sets the HPWH address for each of the heatsources  */
 
 	double getOutletTemp(/**default units C*/) const;
 	double getOutletTemp(UNITS units) const;
@@ -506,6 +507,7 @@ class HPWH::HeatSource {
  public:
   friend class HPWH;
 
+	
 	HeatSource(){}  /**< default constructor, does not create a useful HeatSource */
 	HeatSource(HPWH *parentHPWH);
   /**< constructor assigns a pointer to the hpwh that owns this heat source  */
@@ -513,6 +515,8 @@ class HPWH::HeatSource {
   HeatSource& operator=(const HeatSource &hSource); ///assignment operator
   /**< the copy constructor and assignment operator basically just checks if there
       are backup/companion pointers - these can't be copied */
+
+  HPWH *controller;   /**< Pointer to another HPWH to use as aquastat */
 
   void setupAsResistiveElement(int node, double Watts);
   /**< configure the heat source to be a resisive element, positioned at the

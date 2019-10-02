@@ -1507,6 +1507,12 @@ double HPWH::tankAvg_C(const std::vector<HPWH::NodeWeight> nodeWeights) const {
 	return sum / totWeight;
 }
 
+void HPWH::setControllerAddress(HPWH *otherSource) {
+	for (int i = 0; i < numHeatSources; i++) {
+		setOfSources[i].controller = otherSource;
+	}
+}
+
 //these are the HeatSource functions
 //the public functions
 HPWH::HeatSource::HeatSource(HPWH *parentInput)
@@ -1768,7 +1774,7 @@ bool HPWH::HeatSource::shouldHeat() const {
 			hpwh->msg("\tshouldHeat logic: %s ", turnOnLogicSet[i].description.c_str());
 		}
 
-		double average = hpwh->tankAvg_C(turnOnLogicSet[i].nodeWeights);
+		double average = controller->tankAvg_C(turnOnLogicSet[i].nodeWeights);
 		double comparison;
 
 		if (turnOnLogicSet[i].isAbsolute) {
@@ -1815,7 +1821,7 @@ bool HPWH::HeatSource::shouldHeat() const {
 bool HPWH::HeatSource::shutsOff() const {
 	bool shutOff = false;
 
-	if (hpwh->tankTemps_C[0] >= hpwh->setpoint_C) {
+	if (controller->tankTemps_C[0] >= hpwh->setpoint_C) {
 		shutOff = true;
 		if (hpwh->hpwhVerbosity >= VRB_emetic){
 			hpwh->msg("shutsOff  bottom node hot: %.2d C  \n returns true", hpwh->tankTemps_C[0]);
@@ -1828,7 +1834,7 @@ bool HPWH::HeatSource::shutsOff() const {
 			hpwh->msg("\tshutsOff logic: %s ", shutOffLogicSet[i].description.c_str());
 		}
 
-		double average = hpwh->tankAvg_C(shutOffLogicSet[i].nodeWeights);
+		double average = controller->tankAvg_C(shutOffLogicSet[i].nodeWeights);
 		double comparison;
 
 		if (shutOffLogicSet[i].isAbsolute) {
@@ -2979,6 +2985,8 @@ int HPWH::HPWHinit_file(string configFile){
 
 	calcDerivedValues();
 
+	setControllerAddress(this);
+
 	if (checkInputs() == HPWH_ABORT) {
 		return HPWH_ABORT;
 	}
@@ -3259,12 +3267,14 @@ int HPWH::HPWHinit_genericHPWH(double tankVol_L, double energyFactor, double res
 		setOfSources[i].sortPerformanceMap();
 	}
 
-	if (hpwhVerbosity >= VRB_emetic){
+	setControllerAddress(this);
+
+	//if (hpwhVerbosity >= VRB_emetic){
 		for (int i = 0; i < numHeatSources; i++) {
 			msg("heat source %d: %p \n", i, &setOfSources[i]);
 		}
 		msg("\n\n");
-	}
+	//}
 
 	simHasFailed = false;
 
@@ -5231,6 +5241,8 @@ int HPWH::HPWHinit_presets(MODELS presetNum) {
 		}
 		setOfSources[i].sortPerformanceMap();
 	}
+
+	setControllerAddress(this);
 
 	if (hpwhVerbosity >= VRB_emetic){
 		for (int i = 0; i < numHeatSources; i++) {
