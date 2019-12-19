@@ -328,6 +328,30 @@ int HPWH::runOneStep(double inletT_C, double drawVolume_L,
 			}
 		}
 	}
+	else if (DRstatus == DR_HPONLY) {
+		//if the resistance elements are on, turn off, and engage compressor.
+		//logic is set to say enegage compressor BUT if the compressor gets locked out,
+		//i.e. below the min operating temperature  for the compressor,
+		//use the backup resistance elements, we think this is how it works in reality.
+		//But after this example of heating happens the compressor will be engaged,
+		//the backup resistance is disengaged, but the compressor is locked out and did not heat, and
+		//the backup resistance has added heat to the system.
+		for (int i = 0; i < numHeatSources; i++) {
+			if (setOfSources[i].isEngaged() == true && setOfSources[i].typeOfHeatSource == TYPE_resistance) {
+				setOfSources[i].disengageHeatSource();
+				if (compressorIndex > -1) {
+					setOfSources[compressorIndex].engageHeatSource();
+				}
+				else  {
+					if (hpwhVerbosity >= VRB_reluctant) {
+						msg("ERROR: Running Demand Response with Heat Pump Only Mode without having a heat pump. Aborting \n");
+					}
+					return HPWH_ABORT;
+				}
+			}
+		}
+	}
+	///////////////////////////////////////////////////////////////////////////
 
 	//do heating logic
 	double minutesToRun = minutesPerStep;
@@ -339,21 +363,23 @@ int HPWH::runOneStep(double inletT_C, double drawVolume_L,
 		}
 		if (setOfSources[i].shouldLockOut(heatSourceAmbientT_C)) {
 			setOfSources[i].lockOutHeatSource();
+			msg("Locking out heat source: %i, heatSourceAmbientT_C = %f \n", i, heatSourceAmbientT_C);
 		}
 		if (setOfSources[i].shouldUnlock(heatSourceAmbientT_C)) {
 			setOfSources[i].unlockHeatSource();
+			msg("Locking out heat source: %i, heatSourceAmbientT_C = %f \n", i, heatSourceAmbientT_C);
 		}
 
 		//going through in order, check if the heat source is on
 		if (setOfSources[i].isEngaged()) {
 
+			// Check if locked out and move to backup heat source, should maybe switch which one is engaged?
 			HeatSource* heatSourcePtr;
 			if (setOfSources[i].isLockedOut() && setOfSources[i].backupHeatSource != NULL) {
 				heatSourcePtr = setOfSources[i].backupHeatSource;
 			} else {
 				heatSourcePtr = &setOfSources[i];
 			}
-
 			//and add heat if it is
 			heatSourcePtr->addHeat(heatSourceAmbientT_C, minutesToRun);
 			//if it finished early
@@ -378,7 +404,6 @@ int HPWH::runOneStep(double inletT_C, double drawVolume_L,
 	if (areAllHeatSourcesOff() == true) {
 		isHeating = false;
 	}
-
 
 	//track the depressed local temperature
 	if (doTempDepression) {

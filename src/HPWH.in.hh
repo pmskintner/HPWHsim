@@ -52,7 +52,8 @@ class HPWH {
     DR_BLOCK = 0,   /**<this mode prohibits the elements from engaging and turns
                     off any currently running  */
     DR_ALLOW = 1,   /**< this mode allows the water heater to run normally  */
-    DR_ENGAGE = 2  /**< this mode forces an element to turn on  */
+    DR_ENGAGE = 2,  /**< this mode forces an element to turn on  */
+	DR_HPONLY = 3	/**< this mode allows only the compressor to run and not the resistance elements */
     };
 
   ///specifies the allowable preset HPWH models

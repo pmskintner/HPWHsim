@@ -281,12 +281,14 @@ int main(int argc, char *argv[])
 
     // Process the dr status
     if(allSchedules[4][i] == 0) {
-      drStatus = HPWH::DR_BLOCK;
+		drStatus = HPWH::DR_BLOCK;
     } else if(allSchedules[4][i] == 1) {
-      drStatus = HPWH::DR_ALLOW;
+		drStatus = HPWH::DR_ALLOW;
     } else if(allSchedules[4][i] == 2) {
-      drStatus = HPWH::DR_ENGAGE;
-    }
+		drStatus = HPWH::DR_ENGAGE;
+	} else if (allSchedules[4][i] == 3) {
+		drStatus = HPWH::DR_HPONLY;
+	}
     // Run the step
     hpwh.runOneStep(allSchedules[0][i], // Inlet water temperature (C)
 				GAL_TO_L(allSchedules[1][i]), // Flow in gallons
@@ -310,6 +312,8 @@ int main(int argc, char *argv[])
     outputFile << i << "," << airTemp2 << "," << allSchedules[0][i] << "," << allSchedules[1][i];
     for(j = 0; j < hpwh.getNumHeatSources(); j++) {
       outputFile << "," << heatSourcesEnergyInput[j] << "," << heatSourcesEnergyOutput[j];
+	  cout << "Writing heat source: " << j << "of " << hpwh.getNumHeatSources()<< ", output/input = " << heatSourcesEnergyOutput[j] / heatSourcesEnergyInput[j] << "\n \n";
+
     }
     outputFile << "," << simTCouples[0] << "," << simTCouples[1] << "," << simTCouples[2] <<
       "," << simTCouples[3] << "," << simTCouples[4] << "," << simTCouples[5] << "\n";
