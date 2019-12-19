@@ -307,7 +307,6 @@ int HPWH::runOneStep(double inletT_C, double drawVolume_L,
 		msg("\n");
 	}
 
-
 	//change the things according to DR schedule
 	if (DRstatus == DR_BLOCK) {
 		//force off
@@ -363,11 +362,9 @@ int HPWH::runOneStep(double inletT_C, double drawVolume_L,
 		}
 		if (setOfSources[i].shouldLockOut(heatSourceAmbientT_C)) {
 			setOfSources[i].lockOutHeatSource();
-			msg("Locking out heat source: %i, heatSourceAmbientT_C = %f \n", i, heatSourceAmbientT_C);
 		}
 		if (setOfSources[i].shouldUnlock(heatSourceAmbientT_C)) {
 			setOfSources[i].unlockHeatSource();
-			msg("Locking out heat source: %i, heatSourceAmbientT_C = %f \n", i, heatSourceAmbientT_C);
 		}
 
 		//going through in order, check if the heat source is on
@@ -1773,15 +1770,17 @@ void HPWH::HeatSource::unlockHeatSource() {
 }
 
 bool HPWH::HeatSource::shouldLockOut(double heatSourceAmbientT_C) const {
-
 	// if it's already locked out, keep it locked out
 	if (isLockedOut() == true) {
+		hpwh->msg("  Was already locked out \n");
+
 		return true;
 	}
 	else {
 		//when the "external" temperature is too cold - typically used for compressor low temp. cutoffs
 		//when running, use hysteresis
 		bool lock = false;
+
 		if (isEngaged() == true && heatSourceAmbientT_C < minT - hysteresis_dC) {
 			lock = true;
 			if (hpwh->hpwhVerbosity >= HPWH::VRB_emetic) {
@@ -1811,6 +1810,7 @@ bool HPWH::HeatSource::shouldLockOut(double heatSourceAmbientT_C) const {
 				hpwh->msg("\tlock-out: already above maxT\tambient: %.2f\tmaxT: %.2f", heatSourceAmbientT_C, maxT);
 			}
 		}
+
 		if (lock == true && backupHeatSource == NULL) {
 			if (hpwh->hpwhVerbosity >= HPWH::VRB_emetic) {
 				hpwh->msg("\nWARNING: lock-out triggered, but no backupHeatSource defined. Simulation will continue without lock-out");

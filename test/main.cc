@@ -264,7 +264,8 @@ int main(int argc, char *argv[])
   
 
   // ------------------------------------- Simulate --------------------------------------- //
-
+  int drawsOff = 0;
+  double test_diff = 8.3; //degC
 
   // Loop over the minutes in the test
   cout << "Now Simulating " << minutesToRun << " Minutes of the Test\n";
@@ -289,8 +290,19 @@ int main(int argc, char *argv[])
 	} else if (allSchedules[4][i] == 3) {
 		drStatus = HPWH::DR_HPONLY;
 	}
-    // Run the step
-    hpwh.runOneStep(allSchedules[0][i], // Inlet water temperature (C)
+
+	// First Hour Rating /////////////////////////////////////////////////////////////////////////////////////////////
+	if (i >= 1 && drawsOff == 0)  { allSchedules[1][i] = 3.; }
+	if (i > 1 && i < 60 && (hpwh.getSetpoint() - hpwh.getOutletTemp()) > test_diff) {
+		drawsOff = 1;
+		allSchedules[1][i] = 0.;
+	}
+	else if (i >= 60)  { allSchedules[1][i] = 3.; }
+	 
+	/////////////////////////////////////////////////////////////////////////////////////////////
+
+	 // Run the step
+	 hpwh.runOneStep(allSchedules[0][i], // Inlet water temperature (C)
 				GAL_TO_L(allSchedules[1][i]), // Flow in gallons
 				airTemp2,  // Ambient Temp (C)
 				allSchedules[3][i],  // External Temp (C)
@@ -298,7 +310,7 @@ int main(int argc, char *argv[])
 				1.0,    // Minutes per step
 				1. * GAL_TO_L(allSchedules[1][i]), allSchedules[0][i]);
 			//		  0., 0.) ;
-
+	
 
     // Grab the current status
     getSimTcouples(hpwh, simTCouples, nTestTCouples);
@@ -312,8 +324,6 @@ int main(int argc, char *argv[])
     outputFile << i << "," << airTemp2 << "," << allSchedules[0][i] << "," << allSchedules[1][i];
     for(j = 0; j < hpwh.getNumHeatSources(); j++) {
       outputFile << "," << heatSourcesEnergyInput[j] << "," << heatSourcesEnergyOutput[j];
-	  cout << "Writing heat source: " << j << "of " << hpwh.getNumHeatSources()<< ", output/input = " << heatSourcesEnergyOutput[j] / heatSourcesEnergyInput[j] << "\n \n";
-
     }
     outputFile << "," << simTCouples[0] << "," << simTCouples[1] << "," << simTCouples[2] <<
       "," << simTCouples[3] << "," << simTCouples[4] << "," << simTCouples[5] << "\n";

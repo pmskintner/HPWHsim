@@ -23,7 +23,7 @@ set(testNames
 set(modelNames
   #StorageTank
   AOSmithPHPT60
-  AOSmithHPTU80
+  AOSmithHPTU50
   Sanden80
   RheemHB50
   Stiebel220e

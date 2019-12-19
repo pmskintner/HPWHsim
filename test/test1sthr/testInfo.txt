@@ -1,2 +1,2 @@
-length_of_test 180
+length_of_test 120
 setpoint 51.7
