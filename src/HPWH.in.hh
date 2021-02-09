@@ -40,6 +40,11 @@ class HPWH {
   //this saves on computations */
   static const float UNINITIALIZED_LOCATIONTEMP;  /**< this is used to tell the
   simulation when the location temperature has not been initialized */
+  static const float ASPECTRATIO; /**< A constant to define the aspect ratio between the tank height and
+								  radius (H/R). Used to find the radius and tank height from the volume and then
+								  find the surface area. It is derived from the median value of 88 
+								  insulated storage tanks currently available on the market from
+								  Sanden, AOSmith, HTP, Rheem, and Niles,  */
 
   HPWH();  /**< default constructor */
   HPWH(const HPWH &hpwh);  /**< copy constructor  */
@@ -48,71 +53,123 @@ class HPWH {
 
   ///specifies the various modes for the Demand Response (DR) abilities
   ///values may vary - names should be used
-  enum DRMODES{
-    DR_BLOCK = 0,   /**<this mode prohibits the elements from engaging and turns
-                    off any currently running  */
-    DR_ALLOW = 1,   /**< this mode allows the water heater to run normally  */
-    DR_ENGAGE = 2  /**< this mode forces an element to turn on  */
-    };
+	enum DRMODES {
+		DR_ALLOW = 0b0000,   /**<Allow, this mode allows the water heater to run normally */
+		DR_LOC   = 0b0001, /**< Lock out Compressor, this mode locks out the compressor */
+		DR_LOR   = 0b0010, /**< Lock out Resistance Elements, this mode locks out the resistance elements */
+		DR_TOO   = 0b0100, /**< Top Off Once, this mode ignores the dead band checks and forces the compressor and bottom resistance elements just once. */
+		DR_TOT   = 0b1000 /**< Top Off Timer, this mode ignores the dead band checks and forces the compressor and bottom resistance elements
+						  every x minutes, where x is defined by timer_TOT. */
+	};
 
   ///specifies the allowable preset HPWH models
   ///values may vary - names should be used
-  enum MODELS{
-    // these models are used for testing purposes
-    MODELS_restankNoUA = 1,       /**< a simple resistance tank, but with no tank losses  */
-    MODELS_restankHugeUA = 2,     /**< a simple resistance tank, but with very large tank losses  */
-    MODELS_restankRealistic = 3,  /**< a more-or-less realistic resistance tank  */
-    MODELS_basicIntegrated = 4,   /**< a standard integrated HPWH  */
-    MODELS_externalTest = 5,      /**< a single compressor tank, using "external" topology  */
+  enum MODELS {
+	  // these models are used for testing purposes
+	  MODELS_restankNoUA = 1,       /**< a simple resistance tank, but with no tank losses  */
+	  MODELS_restankHugeUA = 2,     /**< a simple resistance tank, but with very large tank losses  */
+	  MODELS_restankRealistic = 3,  /**< a more-or-less realistic resistance tank  */
+	  MODELS_basicIntegrated = 4,   /**< a standard integrated HPWH  */
+	  MODELS_externalTest = 5,      /**< a single compressor tank, using "external" topology  */
 
-    // these models are based on real tanks and measured lab data
-    // AO Smith models
-    MODELS_AOSmithPHPT60 = 102,         /**< this is the Ecotope model for the 60 gallon Voltex HPWH  */
-    MODELS_AOSmithPHPT80 = 103,         /**<  Voltex 80 gallon tank  */
-    MODELS_AOSmithHPTU50 = 104,    /**< 50 gallon AOSmith HPTU */
-    MODELS_AOSmithHPTU66 = 105,    /**< 66 gallon AOSmith HPTU */
-    MODELS_AOSmithHPTU80 = 106,    /**< 80 gallon AOSmith HPTU */
-    MODELS_AOSmithHPTU80_DR = 107,    /**< 80 gallon AOSmith HPTU */
+	  // these models are based on real tanks and measured lab data
+	  // AO Smith models
+	  MODELS_AOSmithPHPT60 = 102,         /**< this is the Ecotope model for the 60 gallon Voltex HPWH  */
+	  MODELS_AOSmithPHPT80 = 103,         /**<  Voltex 80 gallon tank  */
+	  MODELS_AOSmithHPTU50 = 104,    /**< 50 gallon AOSmith HPTU */
+	  MODELS_AOSmithHPTU66 = 105,    /**< 66 gallon AOSmith HPTU */
+	  MODELS_AOSmithHPTU80 = 106,    /**< 80 gallon AOSmith HPTU */
+	  MODELS_AOSmithHPTU80_DR = 107,    /**< 80 gallon AOSmith HPTU */
+	  MODELS_AOSmithCAHP120 = 108, /**< 12 gallon AOSmith CAHP commercial grade */
 
-    // GE Models
-    MODELS_GE2012 = 110,      /**<  The 2012 era GeoSpring  */
-    MODELS_GE2014STDMode = 111,    /**< 2014 GE model run in standard mode */
-    MODELS_GE2014STDMode_80 = 113,    /**< 2014 GE model run in standard mode, 80 gallon unit */
-    MODELS_GE2014 = 112,           /**< 2014 GE model run in the efficiency mode */
-    MODELS_GE2014_80 = 114,           /**< 2014 GE model run in the efficiency mode, 80 gallon unit */
-    MODELS_GE2014_80DR = 115,           /**< 2014 GE model run in the efficiency mode, 80 gallon unit */
-
-    // Sanden CO2 transcritical heat pump water heaters
-    MODELS_Sanden40 = 120,        /**<  Sanden 40 gallon CO2 external heat pump  */
-    MODELS_Sanden80 = 121,        /**<  Sanden 80 gallon CO2 external heat pump  */
-    MODELS_SandenGen3 = 122, /**<  Sanden 80 gallon CO2 external heat pump, using expanded performance map  */
-
-    // The new-ish Rheem
-    MODELS_RheemHB50 = 140,        /**< Rheem 2014 (?) Model */
-    MODELS_RheemHBDR2250 = 141,    /**< 50 gallon, 2250 W resistance Rheem HB Duct Ready */
-    MODELS_RheemHBDR4550 = 142,    /**< 50 gallon, 4500 W resistance Rheem HB Duct Ready */
-    MODELS_RheemHBDR2265 = 143,    /**< 65 gallon, 2250 W resistance Rheem HB Duct Ready */
-    MODELS_RheemHBDR4565 = 144,    /**< 65 gallon, 4500 W resistance Rheem HB Duct Ready */
-    MODELS_RheemHBDR2280 = 145,    /**< 80 gallon, 2250 W resistance Rheem HB Duct Ready */
-    MODELS_RheemHBDR4580 = 146,    /**< 80 gallon, 4500 W resistance Rheem HB Duct Ready */
-
-    // The new-ish Stiebel
-    MODELS_Stiebel220E = 150,      /**< Stiebel Eltron (2014 model?) */
-
-    // Generic water heaters, corresponding to the tiers 1, 2, and 3
-    MODELS_Generic1 = 160,         /**< Generic Tier 1 */
-    MODELS_Generic2 = 161,         /**< Generic Tier 2 */
-    MODELS_Generic3 = 162,          /**< Generic Tier 3 */
+	  // GE Models
+	  MODELS_GE2012 = 110,      /**<  The 2012 era GeoSpring  */
+	  MODELS_GE2014STDMode = 111,    /**< 2014 GE model run in standard mode */
+	  MODELS_GE2014STDMode_80 = 113,    /**< 2014 GE model run in standard mode, 80 gallon unit */
+	  MODELS_GE2014 = 112,           /**< 2014 GE model run in the efficiency mode */
+	  MODELS_GE2014_80 = 114,           /**< 2014 GE model run in the efficiency mode, 80 gallon unit */
+	  MODELS_GE2014_80DR = 115,           /**< 2014 GE model run in the efficiency mode, 80 gallon unit */
+	  MODELS_BWC2020_65 = 116,    /**<  The 2020 Bradford White 65 gallon unit  */
 
 
-    MODELS_UEF2generic = 170,   /**< UEF 2.0, modified GE2014STDMode case */
-    MODELS_genericCustomUEF = 171,   /**< used for creating "generic" model with custom uef*/
+	  // Sanden CO2 transcritical heat pump water heaters
+	  MODELS_Sanden40 = 120,        /**<  Sanden 40 gallon CO2 external heat pump  */
+	  MODELS_Sanden80 = 121,        /**<  Sanden 80 gallon CO2 external heat pump  */
+	  MODELS_Sanden_GS3_45HPA_US_SP = 122,  /**<  Sanden 80 gallon CO2 external heat pump used for MF  */
+	  MODELS_Sanden120 = 123 ,/**<  Sanden 120 gallon CO2 external heat pump  */
 
-	MODELS_StorageTank = 180,  /**< Generic Tank without heaters */
+	  // The new-ish Rheem
+	  MODELS_RheemHB50 = 140,        /**< Rheem 2014 (?) Model */
+	  MODELS_RheemHBDR2250 = 141,    /**< 50 gallon, 2250 W resistance Rheem HB Duct Ready */
+	  MODELS_RheemHBDR4550 = 142,    /**< 50 gallon, 4500 W resistance Rheem HB Duct Ready */
+	  MODELS_RheemHBDR2265 = 143,    /**< 65 gallon, 2250 W resistance Rheem HB Duct Ready */
+	  MODELS_RheemHBDR4565 = 144,    /**< 65 gallon, 4500 W resistance Rheem HB Duct Ready */
+	  MODELS_RheemHBDR2280 = 145,    /**< 80 gallon, 2250 W resistance Rheem HB Duct Ready */
+	  MODELS_RheemHBDR4580 = 146,    /**< 80 gallon, 4500 W resistance Rheem HB Duct Ready */
+	  
+	  // The new new Rheem
+	  MODELS_Rheem2020Prem40  = 151,   /**< 40 gallon, Rheem 2020 Premium */
+	  MODELS_Rheem2020Prem50  = 152,   /**< 50 gallon, Rheem 2020 Premium */
+	  MODELS_Rheem2020Prem65  = 153,   /**< 65 gallon, Rheem 2020 Premium */
+	  MODELS_Rheem2020Prem80  = 154,   /**< 80 gallon, Rheem 2020 Premium */
+	  MODELS_Rheem2020Build40 = 155,   /**< 40 gallon, Rheem 2020 Builder */
+	  MODELS_Rheem2020Build50 = 156,   /**< 50 gallon, Rheem 2020 Builder */
+	  MODELS_Rheem2020Build65 = 157,   /**< 65 gallon, Rheem 2020 Builder */
+	  MODELS_Rheem2020Build80 = 158,   /**< 80 gallon, Rheem 2020 Builder */
 
-    // Non-preset models
-    MODELS_CustomFile = 200,      /**< HPWH parameters were input via file */
-    MODELS_CustomResTank = 201      /**< HPWH parameters were input via HPWHinit_resTank */
+	  // The new-ish Stiebel
+	  MODELS_Stiebel220E = 160,      /**< Stiebel Eltron (2014 model?) */
+
+	  // Generic water heaters, corresponding to the tiers 1, 2, and 3
+	  MODELS_Generic1 = 170,         /**< Generic Tier 1 */
+	  MODELS_Generic2 = 171,         /**< Generic Tier 2 */
+	  MODELS_Generic3 = 172,          /**< Generic Tier 3 */
+	  MODELS_UEF2generic = 173,   /**< UEF 2.0, modified GE2014STDMode case */
+	  MODELS_genericCustomUEF = 174,   /**< used for creating "generic" model with custom uef*/
+
+	  MODELS_StorageTank = 180,  /**< Generic Tank without heaters */
+
+	  // Non-preset models
+	  MODELS_CustomFile = 200,      /**< HPWH parameters were input via file */
+	  MODELS_CustomResTank = 201,      /**< HPWH parameters were input via HPWHinit_resTank */
+
+	  // Larger Colmac models in single pass configuration 
+	  MODELS_ColmacCxV_5_SP  = 210,	 /**<  Colmac CxA_5 external heat pump in Single Pass Mode  */
+	  MODELS_ColmacCxA_10_SP = 211,  /**<  Colmac CxA_10 external heat pump in Single Pass Mode */
+	  MODELS_ColmacCxA_15_SP = 212,  /**<  Colmac CxA_15 external heat pump in Single Pass Mode */
+	  MODELS_ColmacCxA_20_SP = 213,  /**<  Colmac CxA_20 external heat pump in Single Pass Mode */
+	  MODELS_ColmacCxA_25_SP = 214,  /**<  Colmac CxA_25 external heat pump in Single Pass Mode */
+	  MODELS_ColmacCxA_30_SP = 215,  /**<  Colmac CxA_30 external heat pump in Single Pass Mode */
+
+	  // Larger Colmac models in multi pass configuration 
+	  MODELS_ColmacCxV_5_MP  = 310,	 /**<  Colmac CxA_5 external heat pump in Multi Pass Mode  */
+	  MODELS_ColmacCxA_10_MP = 311,  /**<  Colmac CxA_10 external heat pump in Multi Pass Mode */
+	  MODELS_ColmacCxA_15_MP = 312,  /**<  Colmac CxA_15 external heat pump in Multi Pass Mode */
+	  MODELS_ColmacCxA_20_MP = 313,  /**<  Colmac CxA_20 external heat pump in Multi Pass Mode */
+	  MODELS_ColmacCxA_25_MP = 314,  /**<  Colmac CxA_25 external heat pump in Multi Pass Mode */
+	  MODELS_ColmacCxA_30_MP = 315,  /**<  Colmac CxA_30 external heat pump in Multi Pass Mode */
+	  
+	  // Larger Nyle models in single pass configuration
+	  MODELS_NyleC25A_SP = 230, /*< Nyle C25A external heat pump in Single Pass Mode  */
+	  MODELS_NyleC60A_SP = 231,  /*< Nyle C60A external heat pump in Single Pass Mode  */
+	  MODELS_NyleC90A_SP = 232,  /*< Nyle C90A external heat pump in Single Pass Mode  */
+	  MODELS_NyleC125A_SP = 233, /*< Nyle C125A external heat pump in Single Pass Mode */
+	  MODELS_NyleC185A_SP = 234, /*< Nyle C185A external heat pump in Single Pass Mode */
+	  MODELS_NyleC250A_SP = 235, /*< Nyle C250A external heat pump in Single Pass Mode */	 
+	  // Larger Nyle models with the cold weather package!
+	  MODELS_NyleC60A_C_SP  = 241,  /*< Nyle C60A external heat pump in Single Pass Mode  */
+	  MODELS_NyleC90A_C_SP  = 242,  /*< Nyle C90A external heat pump in Single Pass Mode  */
+	  MODELS_NyleC125A_C_SP = 243, /*< Nyle C125A external heat pump in Single Pass Mode */
+	  MODELS_NyleC185A_C_SP = 244, /*< Nyle C185A external heat pump in Single Pass Mode */
+	  MODELS_NyleC250A_C_SP = 245, /*< Nyle C250A external heat pump in Single Pass Mode */
+
+	  // Larger Nyle models in multi pass configuration
+	  MODELS_NyleC25A_MP  = 330, /*< Nyle C25A external heat pump in Multi Pass Mode  */
+	  MODELS_NyleC60A_MP  = 331,  /*< Nyle C60A external heat pump in Multi Pass Mode  */
+	  MODELS_NyleC90A_MP  = 332,  /*< Nyle C90A external heat pump in Multi Pass Mode  */
+	  MODELS_NyleC125A_MP = 333, /*< Nyle C125A external heat pump in Multi Pass Mode */
+	  MODELS_NyleC185A_MP = 334, /*< Nyle C185A external heat pump in Multi Pass Mode */
+	  MODELS_NyleC250A_MP = 335  /*< Nyle C250A external heat pump in Multi Pass Mode */
     };
 
   ///specifies the modes for writing output
@@ -150,6 +207,12 @@ class HPWH {
 	TYPE_extra		  /**< an extra element to add user defined heat*/
     };
 
+  /** specifies the extrapolation method based on Tair, from the perfmap for a heat source  */
+  enum EXTRAP_METHOD {
+	  EXTRAP_LINEAR, /**< the default extrapolates linearly */
+	  EXTRAP_NEAREST /**< extrapolates using nearest neighbor, will just continue from closest point  */
+  };
+
   /** specifies the unit type for outputs in the CSV file-s  */
   enum CSVOPTIONS {
 	  CSVOPT_NONE,
@@ -180,15 +243,23 @@ class HPWH {
 	HeatingLogic bottomHalf(double d) const;
 	HeatingLogic bottomTwelth(double d) const;
 	HeatingLogic bottomSixth(double d) const;
+	HeatingLogic bottomSixth_absolute(double d) const;
 	HeatingLogic secondSixth(double d) const;
 	HeatingLogic thirdSixth(double d) const;
 	HeatingLogic fourthSixth(double d) const;
 	HeatingLogic fifthSixth(double d) const;
 	HeatingLogic topSixth(double d) const;
+
   HeatingLogic standby(double d) const;
   HeatingLogic topNodeMaxTemp(double d) const;
   HeatingLogic bottomNodeMaxTemp(double d) const;
   HeatingLogic bottomTwelthMaxTemp(double d) const;
+  HeatingLogic topThirdMaxTemp(double d) const;
+  HeatingLogic bottomSixthMaxTemp(double d) const;
+  HeatingLogic secondSixthMaxTemp(double d) const;
+  HeatingLogic fifthSixthMaxTemp(double d) const;
+  HeatingLogic topSixthMaxTemp(double d) const;
+
   HeatingLogic largeDraw(double d) const;
   HeatingLogic largerDraw(double d) const;
 
@@ -241,26 +312,39 @@ class HPWH {
    * are taken from the GE2015_STDMode model.
    */
 
-  int runOneStep(double inletT_C, double drawVolume_L,
-                  double ambientT_C, double externalT_C,
-                  DRMODES DRstatus, double minutesPerStep,
-				  double inletVol2_L = 0., double inletT2_C = 0.,
-				  std::vector<double>* nodePowerExtra_W = NULL);
+	int runOneStep(double drawVolume_L, double ambientT_C,
+		double externalT_C, DRMODES DRstatus, double inletVol2_L = 0., double inletT2_C = 0.,
+		std::vector<double>* nodePowerExtra_W = NULL);
 	/**< This function will progress the simulation forward in time by one step
 	 * all calculated outputs are stored in private variables and accessed through functions
 	 *
 	 * The return value is 0 for successful simulation run, HPWH_ABORT otherwise
 	 */
+	
+	/** An overloaded function that uses takes inletT_C  */
+	int runOneStep(double inletT_C, double drawVolume_L, double ambientT_C, 
+		double externalT_C, DRMODES DRstatus, double inletVol2_L = 0., double inletT2_C = 0.,
+		std::vector<double>* nodePowerExtra_W = NULL) {
+		setInletT(inletT_C);
+		return runOneStep(drawVolume_L, ambientT_C,
+			externalT_C, DRstatus, inletVol2_L, inletT2_C,
+			nodePowerExtra_W);
+	};
+
 
 	int runNSteps(int N,  double *inletT_C, double *drawVolume_L,
                   double *tankAmbientT_C, double *heatSourceAmbientT_C,
-                  DRMODES *DRstatus, double minutesPerStep);
+                  DRMODES *DRstatus);
 	/**< This function will progress the simulation forward in time by N (equal) steps
 	 * The calculated values will be summed or averaged, as appropriate, and
 	 * then stored in the usual variables to be accessed through functions
 	 *
 	 * The return value is 0 for successful simulation run, HPWH_ABORT otherwise
 	 */
+
+	/** Setters for the what are typically input variables  */
+	void setInletT(double newInletT_C) { member_inletT_C = newInletT_C; };
+	void setMinutesPerStep(double newMinutesPerStep) { minutesPerStep = newMinutesPerStep; };
 
 
   void setVerbosity(VERBOSITY hpwhVrb);
@@ -284,11 +368,11 @@ class HPWH {
 
 
 
-  bool isSetpointFixed();  /**< is the setpoint allowed to be changed */
+  bool isSetpointFixed() const;  /**< is the setpoint allowed to be changed */
   int setSetpoint(double newSetpoint, UNITS units = UNITS_C);/**<default units C*/
   /**< a function to change the setpoint - useful for dynamically setting it
       The return value is 0 for successful setting, HPWH_ABORT for units failure  */
-  double getSetpoint();
+  double getSetpoint(UNITS units = UNITS_C) const;
   /**< a function to check the setpoint - returns setpoint in celcius  */
 
   int resetTankToSetpoint();
@@ -301,16 +385,19 @@ class HPWH {
   int setDoTempDepression(bool doTempDepress);
   /**< This is a simple setter for the temperature depression option */
 
-  int setTankSize_adjustUA(double HPWH_size, UNITS units );
+  int setTankSize_adjustUA(double HPWH_size, UNITS units = UNITS_L, bool forceChange = false);
   /**< This sets the tank size and adjusts the UA the HPWH currently has to have the same U value but a new A.
 		A is found via getTankSurfaceArea()*/
 
-  double getTankSurfaceArea(UNITS units = UNITS_FT2);
+  double getTankSurfaceArea(UNITS units = UNITS_FT2) const;
+  static double getTankSurfaceArea(double vol, UNITS volUnits = UNITS_L, UNITS surfAUnits = UNITS_FT2);
   /**< Returns the tank surface area based off of real storage tanks*/
-  double getTankRadius(UNITS units = UNITS_FT);
+  double getTankRadius(UNITS units = UNITS_FT) const;
+  static double getTankRadius(double vol, UNITS volUnits = UNITS_L, UNITS radiusUnits = UNITS_FT);
   /**< Returns the tank surface radius based off of real storage tanks*/
 
-  int setTankSize(double HPWH_size, UNITS units = UNITS_L);
+  bool isTankSizeFixed() const;  /**< is the tank size allowed to be changed */
+  int setTankSize(double HPWH_size, UNITS units = UNITS_L, bool forceChange = false);
   /**< Defualt units L. This is a simple setter for the tank volume in L or GAL */
 
   double getTankSize(UNITS units = UNITS_L) const;
@@ -334,14 +421,19 @@ class HPWH {
   int setFittingsUA(double UA, UNITS units = UNITS_kJperHrC);
   /**< This is a setter for the UA of just the fittings, with or without units specified - default is metric, kJperHrC */
 
-
   int setInletByFraction(double fractionalHeight);
   /**< This is a setter for the water inlet height which sets it as a fraction of the number of nodes from the bottom up*/
   int setInlet2ByFraction(double fractionalHeight);
   /**< This is a setter for the water inlet height which sets it as a fraction of the number of nodes from the bottom up*/
   int setNodeNumFromFractionalHeight(double fractionalHeight, int &inletNum);
   /**< This is a setter for the water inlet height, by fraction. */
-  int getInletHeight(int whichInlet);
+
+  int setTimerLimitTOT(double limit_min);
+  /**< Sets the timer limit in minutes for the DR_TOT call. Must be > 0 minutes and < 1440 minutes. */
+  double getTimerLimitTOT_minute() const;
+  /**< Returns the timer limit in minutes for the DR_TOT call. */
+
+  int getInletHeight(int whichInlet) const;
   /**< returns the water inlet height node number */
 
 	int getNumNodes() const;
@@ -398,20 +490,16 @@ class HPWH {
   /**< get the heat content of the tank, relative to zero celsius
    * returns using kilojoules */
 
-	/** An overloaded function that uses some member variables, instead of taking them as inputs  */
-	int runOneStep(double drawVolume_L, double ambientT_C,
-	  double externalT_C, DRMODES DRstatus, double inletVol2_L = 0., double inletT2_C = 0.,
-	  std::vector<double>* nodePowerExtra_W = NULL) {
-	  return runOneStep(member_inletT_C, drawVolume_L, ambientT_C,
-		  externalT_C, DRstatus, member_minutesPerStep, inletVol2_L, inletT2_C,
-		  nodePowerExtra_W);
-	};
+  int getHPWHModel() const;
+  /**< get the model number of the HPWHsim model number of the hpwh */
 
+  bool shouldDRLockOut(HEATSOURCE_TYPE hs, DRMODES DR_signal) const;
+  /**< Checks the demand response signal against the different heat source types  */
 
-	/** Setters for the what are typically input variables  */
-  void setInletT(double newInletT_C) {member_inletT_C = newInletT_C;};
-  void setMinutesPerStep(double newMinutesPerStep) {member_minutesPerStep = newMinutesPerStep;};
+  void resetTopOffTimer();
+  /**< resets variables for timer associated with the DR_TOT call  */
 
+	
   double getLocationTemp_C() const;
   int setMaxTempDepression(double maxDepression, UNITS units = UNITS_C);
 
@@ -419,7 +507,7 @@ class HPWH {
  private:
   class HeatSource;
 
-	void updateTankTemps(double draw, double inletT, double ambientT, double minutesPerStep, double inletVol2_L, double inletT2_L);
+	void updateTankTemps(double draw, double inletT, double ambientT, double inletVol2_L, double inletT2_L);
 	void mixTankInversions();
 	/**< Mixes the any temperature inversions in the tank after all the temperature calculations  */
 	bool areAllHeatSourcesOff() const;
@@ -427,7 +515,7 @@ class HPWH {
 	void turnAllHeatSourcesOff();
 	/**< disengage each heat source  */
 
-	void addExtraHeat(std::vector<double>* nodePowerExtra_W, double tankAmbientT_C, double minutesPerStep);
+	void addExtraHeat(std::vector<double>* nodePowerExtra_W, double tankAmbientT_C);
 	/**< adds extra heat defined by the user. Where nodeExtraHeat[] is a vector of heat quantities to be added during the step.  nodeExtraHeat[ 0] would go to bottom node, 1 to next etc.  */
 
   double tankAvg_C(const std::vector<NodeWeight> nodeWeights) const;
@@ -444,6 +532,9 @@ class HPWH {
 
   int checkInputs();
 	/**< a helper function to run a few checks on the HPWH input parameters  */
+
+  bool HPWH::areNodeWeightsValid(HPWH::HeatingLogic logic);
+	 /**< a helper for the helper, checks the node weights are valid */
 
 
   void sayMessage(const std::string message) const;
@@ -462,6 +553,9 @@ class HPWH {
 	bool setpointFixed;
 	/**< does the HPWH allow the setpoint to vary  */
 
+	bool tankSizeFixed;
+	/**< does the HPWH have a constant tank size or can it be changed  */
+
   VERBOSITY hpwhVerbosity;
 	/**< an enum to let the sim know how much output to say  */
 
@@ -469,6 +563,7 @@ class HPWH {
 	/**< function pointer to indicate an external message processing function  */
   void* messageCallbackContextPtr;
 	/**< caller context pointer for external message processing  */
+
 
 
   MODELS hpwhModel;
@@ -484,6 +579,10 @@ class HPWH {
 
 	int lowestElementIndex;
 	/**< The index of the lowest resistance element heat source (set to -1 if no resistance elements)*/
+
+
+	int VIPIndex;
+	/**< The index of the VIP resistance element heat source (set to -1 if no VIP resistance elements)*/
 
 	int numNodes;
 	/**< the number of nodes in the tank - must be >= 12, in multiples of 12  */
@@ -521,6 +620,14 @@ class HPWH {
 	double *nextTankTemps_C;
 	/**< an array holding the future temperature of each node for the conduction calculation - 0 is the bottom node, numNodes is the top  */
 
+	DRMODES prevDRstatus;
+	/**< the DRstatus of the tank in the previous time step and at the end of runOneStep */
+
+	double timerLimitTOT;
+	/**< the time limit in minutes on the timer when the compressor and resistance elements are turned back on, used with DR_TOT. */
+	double timerTOT;
+	/**< the timer used for DR_TOT to turn on the compressor and resistance elements. */
+
 
   // Some outputs
 	double outletTemp_C;
@@ -544,7 +651,7 @@ class HPWH {
   double maxDepression_C = 2.5;
   /** a couple variables to hold values which are typically inputs  */
   double member_inletT_C;
-  double member_minutesPerStep;
+  double minutesPerStep = 1;
 
   bool doInversionMixing;
   /**<  If and only if true will model temperature inversion mixing in the tank  */
@@ -578,7 +685,7 @@ class HPWH::HeatSource {
 
 	bool isEngaged() const;
   /**< return whether or not the heat source is engaged */
-	void engageHeatSource();
+	void engageHeatSource(DRMODES DRstatus = DR_ALLOW);
   /**< turn heat source on, i.e. set isEngaged to TRUE */
 	void disengageHeatSource();
   /**< turn heat source off, i.e. set isEngaged to FALSE */
@@ -594,6 +701,12 @@ class HPWH::HeatSource {
   /**< queries the heat source as to whether it should lock out */
   bool shouldUnlock(double heatSourceAmbientT_C) const;
   /**< queries the heat source as to whether it should unlock */
+
+  bool toLockOrUnlock(double heatSourceAmbientT_C);
+  /**< combines shouldLockOut and shouldUnlock to one master function which locks or unlocks the heatsource. Return boolean lockedOut (true if locked, false if unlocked)*/
+
+
+
 	bool shouldHeat() const;
   /**< queries the heat source as to whether or not it should turn on */
 	bool shutsOff() const;
@@ -603,7 +716,7 @@ class HPWH::HeatSource {
   /**< returns the index of the heat source where this heat source is a backup.
       returns -1 if none found. */
 
-	void addHeat_temp(double externalT_C, double minutesPerStep);
+	void addHeat_temp(double externalT_C);
 	void addHeat(double externalT_C, double minutesToRun);
   /**< adds heat to the hpwh - this is the function that interprets the
       various configurations (internal/external, resistance/heat pump) to add heat */
@@ -612,7 +725,16 @@ class HPWH::HeatSource {
                      double cnd5, double cnd6, double cnd7, double cnd8,
                      double cnd9, double cnd10, double cnd11, double cnd12);
   /**< a function to set the condensity values, it pretties up the init funcs. */
+	
+	void linearInterp(double &ynew, double xnew, double x0, double x1, double y0, double y1);
+	/**< Does a simple linear interpolation between two points to the xnew point */
+	void regressedMethod(double &ynew, std::vector<double> &coefficents, double x1, double x2, double x3);
+	/**< Does a calculation based on the ten term regression equation  */
 
+	void setupDefrostMap(double derate35 = 0.8865);
+	/**< configure the heat source with a default for the defrost derating */
+	void defrostDerate(double &to_derate, double airT_C);
+	/**< Derates the COP of a system based on the air temperature */
 
  private:
   //start with a few type definitions
@@ -631,6 +753,9 @@ class HPWH::HeatSource {
 
   bool lockedOut;
   /**< is the heat source locked out	 */
+
+  bool doDefrost;
+  /**<  If and only if true will derate the COP of a compressor to simulate a defrost cycle  */
 
   // some outputs
 	double runtime_min;
@@ -668,8 +793,8 @@ class HPWH::HeatSource {
 
   struct perfPoint {
     double T_F;
-    double inputPower_coeffs[3]; // c0 + c1*T + c2*T*T
-    double COP_coeffs[3]; // c0 + c1*T + c2*T*T
+	std::vector<double>  inputPower_coeffs; // c0 + c1*T + c2*T*T
+	std::vector<double>  COP_coeffs; // c0 + c1*T + c2*T*T
   };
 
   std::vector<perfPoint> perfMap;
@@ -680,6 +805,20 @@ class HPWH::HeatSource {
 	/** a vector to hold the set of logical choices that can cause an element to turn off */
 	std::vector<HeatingLogic> shutOffLogicSet;
 
+	struct defrostPoint {
+		double T_F;
+		double derate_fraction;
+	};
+	std::vector<defrostPoint> defrostMap;
+	/**< A list of points for the defrost derate factor ordered by increasing external temperature */
+
+	struct maxOut_minAir {
+		double outT_C;
+		double airT_C;
+	 };
+	maxOut_minAir maxOut_at_LowT;
+	/**<  maximum output temperature at the minimum operating temperature of HPWH environment (minT)*/
+
   void addTurnOnLogic(HeatingLogic logic);
   void addShutOffLogic(HeatingLogic logic);
   /**< these are two small functions to remove some of the cruft in initiation functions */
@@ -689,6 +828,7 @@ class HPWH::HeatSource {
 
   double maxT;
   /**<  maximum operating temperature of HPWH environment */
+
 
 	double hysteresis_dC;
 	/**< a hysteresis term that prevents short cycling due to heat pump self-interaction
@@ -713,6 +853,7 @@ class HPWH::HeatSource {
 	int lowestNode;
   /**< hold the number of the first non-zero condensity entry */
 
+	EXTRAP_METHOD extrapolationMethod; /**< linear or nearest neighbor*/
 
 
 
@@ -729,7 +870,7 @@ class HPWH::HeatSource {
   void getCapacity(double externalT_C, double condenserTemp_C, double &input_BTUperHr, double &cap_BTUperHr, double &cop);
   void calcHeatDist(std::vector<double> &heatDistribution);
 
-	double getCondenserTemp();
+	double getCondenserTemp() const;
   /**< returns the temperature of the condensor - it's a weighted average of the
       tank temperature, using the condensity as weights */
 
@@ -754,9 +895,15 @@ inline double KJ_TO_KWH(double kj) { return (kj/3600.0); }
 inline double BTU_TO_KJ(double btu) { return (btu * 1.055); }
 inline double GAL_TO_L(double gallons) { return (gallons * 3.78541); }
 inline double L_TO_GAL(double liters) { return (liters / 3.78541); }
+inline double L_TO_FT3(double liters) { return (liters / 28.31685); }
 inline double UAf_TO_UAc(double UAf) { return (UAf * 1.8 / 0.9478); }
 
 inline double FT_TO_M(double feet) { return (feet / 3.2808); }
 inline double FT2_TO_M2(double feet2) { return (feet2 / 10.7640); }
+
+inline HPWH::DRMODES operator|(HPWH::DRMODES a, HPWH::DRMODES b)
+{
+	return static_cast<HPWH::DRMODES>(static_cast<int>(a) | static_cast<int>(b));
+}
 
 #endif

@@ -9,10 +9,12 @@
  *
  */
 #include "HPWH.hh"
+#include "testUtilityFcts.cc"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string> 
+#include <algorithm>    // std::max
 
 #define MAX_DIR_LENGTH 255
 #define DEBUG 0
@@ -21,14 +23,12 @@ using std::cout;
 using std::endl;
 using std::string;
 using std::ifstream;
-using std::ofstream;
-
+//using std::ofstream;
 
 #define F_TO_C(T) ((T-32.0)*5.0/9.0)
 #define GAL_TO_L(GAL) (GAL*3.78541)
 
 typedef std::vector<double> schedule;
-
 
 int readSchedule(schedule &scheduleArray, string scheduleFileName, long minutesOfTest);
 
@@ -41,27 +41,35 @@ int main(int argc, char *argv[])
   HPWH::CSVOPTIONS IP = HPWH::CSVOPT_IPUNITS; //  CSVOPT_NONE or  CSVOPT_IPUNITS
   // HPWH::UNITS units = HPWH::UNITS_F;
 
-  const int nTestTCouples = 6;
+  const double EBALTHRESHOLD = 0.005;
 
+  const int nTestTCouples = 6;
   // Schedule stuff
   std::vector<string> scheduleNames;
-  std::vector<schedule> allSchedules(5);
+  std::vector<schedule> allSchedules(6);
 
-  string testDirectory, fileToOpen, scheduleName, var1, input1, input2, input3, inputFile, outputDirectory;
-  string inputVariableName;
-  double testVal, newSetpoint, airTemp, airTemp2, tempDepressThresh, inletH;
+  string testDirectory, fileToOpen, fileToOpen2, scheduleName, var1, input1, input2, input3, inputFile, outputDirectory;
+  string inputVariableName, firstCol;
+  double testVal, newSetpoint, airTemp, airTemp2, tempDepressThresh, inletH, newTankSize, tot_limit;
   int i, outputCode;
   long minutesToRun;
+
+  double cumHeatIn[3] = { 0,0,0 };
+  double cumHeatOut[3] = { 0,0,0 };
 
   bool HPWH_doTempDepress;
   int doInvMix, doCondu;
 
   FILE * outputFile;
+  FILE * yearOutFile;
   ifstream controlFile;
 
   string strPreamble;
-  // string strHead = "minutes,Ta,inletT,draw,outletT,";
-  string strHead = "minutes,Ta,inletT,draw,";
+  string strHead = "minutes,Ta,Tsetpoint,inletT,draw,";
+  
+  if (DEBUG) {
+	 hpwh.setVerbosity(HPWH::VRB_reluctant);
+  }
 
   //.......................................
   //process command line arguments
@@ -71,8 +79,7 @@ int main(int argc, char *argv[])
 
   //Obvious wrong number of command line arguments
   if ((argc > 6)) {
-    // printf("Invalid input.  This program takes a single argument.  Help is on the way:\n\n");
-    cout << "Invalid input. This program takes three arguments: model specification type, model specification, and test name\n";
+    cout << "Invalid input. This program takes FOUR arguments: model specification type (ie. Preset or File), model specification (ie. Sanden80),  test name (ie. test50) and output directory\n";
     exit(1);
   }
   //Help message
@@ -110,53 +117,9 @@ int main(int argc, char *argv[])
   newSetpoint = 0;
   if(input1 == "Preset") {
     inputFile = "";
-    if(input2 == "Voltex60" || input2 == "AOSmithPHPT60") {
-      model = HPWH::MODELS_AOSmithPHPT60;
-    } else if(input2 == "Voltex80" || input2 == "AOSmith80") {
-      model = HPWH::MODELS_AOSmithPHPT80;
-    } else if(input2 == "GEred" || input2 == "GE") {
-      model = HPWH::MODELS_GE2012;
-    } else if(input2 == "SandenGAU" || input2 == "Sanden80" || input2 == "SandenGen3") {
-      model = HPWH::MODELS_Sanden80;
-    } else if(input2 == "SandenGES" || input2 == "Sanden40") {
-      model = HPWH::MODELS_Sanden40;
-    } else if(input2 == "AOSmithHPTU50") {
-      model = HPWH::MODELS_AOSmithHPTU50;
-    } else if(input2 == "AOSmithHPTU66") {
-      model = HPWH::MODELS_AOSmithHPTU66;
-    } else if(input2 == "AOSmithHPTU80") {
-      model = HPWH::MODELS_AOSmithHPTU80;
-    } else if(input2 == "AOSmithHPTU80DR") {
-      model = HPWH::MODELS_AOSmithHPTU80_DR;
-    } else if(input2 == "GE502014STDMode" || input2 == "GE2014STDMode") {
-      model = HPWH::MODELS_GE2014STDMode;
-    } else if(input2 == "GE502014" || input2 == "GE2014") {
-      model = HPWH::MODELS_GE2014;
-    } else if(input2 == "GE802014") {
-      model = HPWH::MODELS_GE2014_80DR;
-    } else if(input2 == "RheemHB50") {
-      model = HPWH::MODELS_RheemHB50;
-    } else if(input2 == "Stiebel220e" || input2 == "Stiebel220E") {
-      model = HPWH::MODELS_Stiebel220E;
-    } else if(input2 == "Generic1") {
-      model = HPWH::MODELS_Generic1;
-    } else if(input2 == "Generic2") {
-      model = HPWH::MODELS_Generic2;
-    } else if(input2 == "Generic3") {
-      model = HPWH::MODELS_Generic3;
-    } else if(input2 == "custom") {
-      model = HPWH::MODELS_CustomFile;
-	} else if (input2 == "restankRealistic") {
-		model = HPWH::MODELS_restankRealistic;
-	} else if(input2 == "StorageTank") {
-      model = HPWH::MODELS_StorageTank;
+    
+	model = mapStringToPreset(input2);
 
-      //do nothin, use custom-compiled input specified later
-    } else {
-      model = HPWH::MODELS_basicIntegrated;
-      cout << "Couldn't find model " << input2 << ".  Exiting...\n";
-      exit(1);
-    }
     if (hpwh.HPWHinit_presets(model) != 0) exit(1);
     if(model == HPWH::MODELS_Sanden80 || model == HPWH::MODELS_Sanden40) {
       newSetpoint = (149 - 32) / 1.8;
@@ -180,27 +143,38 @@ int main(int argc, char *argv[])
     exit(1);
   }
   minutesToRun = 0;
-  newSetpoint = 0.0;
+  newSetpoint = 0.;
   doCondu = 1;
   doInvMix = 1;
-  inletH = 0.0;
+  inletH = 0.;
+  newTankSize = 0.;
+  tot_limit = 0.;
   cout << "Running: " << input2 << ", " << input1 << ", " << input3 << endl;
 
   while(controlFile >> var1 >> testVal) {
 	if(var1 == "setpoint") { // If a setpoint was specified then override the default
 		newSetpoint = testVal;
     }
-    if(var1 == "length_of_test") {
+	else if(var1 == "length_of_test") {
 		minutesToRun = (int) testVal;
     }
-	if (var1 == "doInversionMixing") {
+	else if(var1 == "doInversionMixing") {
 		doInvMix = (testVal > 0.0) ? 1 : 0;
 	}
-	if (var1 == "doConduction") {
+	else if(var1 == "doConduction") {
 		doCondu = (testVal > 0.0) ? 1 : 0;
 	}
-	if (var1 == "inletH") {
+	else if(var1 == "inletH") {
 		inletH = testVal;
+	}
+	else if (var1 == "tanksize") {
+		newTankSize = testVal;
+	}
+	else if(var1 == "tot_limit") {
+		tot_limit = testVal;
+	}
+	else {
+		cout << var1 << " in testInfo.txt is an unrecogized key.\n";
 	}
   }
 
@@ -215,92 +189,182 @@ int main(int argc, char *argv[])
   scheduleNames.push_back("ambientT");
   scheduleNames.push_back("evaporatorT");
   scheduleNames.push_back("DR");
+  scheduleNames.push_back("setpoint");
+
   for(i = 0; (unsigned)i < scheduleNames.size(); i++) {
     fileToOpen = testDirectory + "/" + scheduleNames[i] + "schedule.csv";
     outputCode = readSchedule(allSchedules[i], fileToOpen, minutesToRun);
     if(outputCode != 0) {
-      cout << "readSchedule returns an error on " << scheduleNames[i] << " schedule!\n";
-      exit(1);
+		if (scheduleNames[i] != "setpoint") {
+			cout << "readSchedule returns an error on " << scheduleNames[i] << " schedule!\n";
+			exit(1);
+		}
+		else {
+			outputCode = 0;
+		}
     }
   }
-
+  
   if (doInvMix == 0) {
-	  hpwh.setDoInversionMixing(false);
+	  outputCode += hpwh.setDoInversionMixing(false);
   }
 
   if (doCondu == 0) {
-	  hpwh.setDoConduction(false);
+	  outputCode += hpwh.setDoConduction(false);
   }
-
-  if(newSetpoint > 0) {
-	hpwh.setSetpoint(newSetpoint);
-    hpwh.resetTankToSetpoint();
+  if (newSetpoint > 0) {
+	  if (!allSchedules[5].empty()) {
+		  hpwh.setSetpoint(allSchedules[5][0]); //expect this to fail sometimes
+		  hpwh.resetTankToSetpoint();
+	  }
+	  else {
+		  hpwh.setSetpoint(newSetpoint);
+		  hpwh.resetTankToSetpoint();
+	  }
   }
- 
   if (inletH > 0) {
- 	  hpwh.setInletByFraction(inletH);
+	  outputCode += hpwh.setInletByFraction(inletH);
+  }
+  if (newTankSize > 0) {
+	  hpwh.setTankSize(newTankSize, HPWH::UNITS_GAL);
+  }
+  if (tot_limit > 0) {
+	  outputCode += hpwh.setTimerLimitTOT(tot_limit);
   }
 
-  // ----------------------Open the Output File and Print the Header---------------------------- //
-  fileToOpen = outputDirectory + "/" + input3 + "_" + input1 + "_" + input2 + ".csv";
- 
-  if (fopen_s(&outputFile, fileToOpen.c_str(), "w+") != 0) {
-  cout << "Could not open output file " << fileToOpen << "\n";
-  exit(1);
- }
+  if (outputCode != 0) {
+	  cout << "Control file testInfo.txt has unsettable specifics in it. \n";
+	  exit(1);
+  }
 
-  hpwh.WriteCSVHeading(outputFile, strHead.c_str(), nTestTCouples, 0);
-  
+  // ----------------------Open the Output Files and Print the Header---------------------------- //
+ 
+  if (minutesToRun > 500000.) {
+	  fileToOpen = outputDirectory + "/DHW_YRLY.csv";
+
+	  if (fopen_s(&yearOutFile, fileToOpen.c_str(), "a+") != 0) {
+		  cout << "Could not open output file " << fileToOpen << "\n";
+		  exit(1);
+	  }
+  }
+  else {
+	  fileToOpen = outputDirectory + "/" + input3 + "_" + input1 + "_" + input2 + ".csv";
+
+	  if (fopen_s(&outputFile, fileToOpen.c_str(), "w+") != 0) {
+		  cout << "Could not open output file " << fileToOpen << "\n";
+		  exit(1);
+	  }
+	  hpwh.WriteCSVHeading(outputFile, strHead.c_str(), nTestTCouples, 0);
+  }
   // ------------------------------------- Simulate --------------------------------------- //
   cout << "Now Simulating " << minutesToRun << " Minutes of the Test\n";
 
   std::vector<double> nodeExtraHeat_W;
   std::vector<double>* vectptr = NULL;
   // Loop over the minutes in the test
-  for(i = 0; i < minutesToRun; i++) {
+  for (i = 0; i < minutesToRun; i++) {
 
-    if(DEBUG) {
-      cout << "Now on minute " << i << "\n";
-    }
+	  if (DEBUG) {
+		  cout << "Now on minute: " << i << "\n";
+	  }
 
-    if(HPWH_doTempDepress) {
-      airTemp2 = F_TO_C(airTemp);
-    } else {
-      airTemp2 = allSchedules[2][i];
-    }
+	  if (HPWH_doTempDepress) {
+		  airTemp2 = F_TO_C(airTemp);
+	  }
+	  else {
+		  airTemp2 = allSchedules[2][i];
+	  }
 
-    // Process the dr status
-    if(allSchedules[4][i] == 0) {
-      drStatus = HPWH::DR_BLOCK;
-    } else if(allSchedules[4][i] == 1) {
-      drStatus = HPWH::DR_ALLOW;
-    } else if(allSchedules[4][i] == 2) {
-      drStatus = HPWH::DR_ENGAGE;
-    }
+	  double tankHCStart = hpwh.getTankHeatContent_kJ();
 
-    // Run the step
-	hpwh.runOneStep(allSchedules[0][i], // Inlet water temperature (C)
-		GAL_TO_L(allSchedules[1][i]), // Flow in gallons
-		airTemp2,  // Ambient Temp (C)
-		allSchedules[3][i],  // External Temp (C)
-		drStatus, // DDR Status (now an enum. Fixed for now as allow)
-		1.0,    // Minutes per step
-		1. * GAL_TO_L(allSchedules[1][i]), allSchedules[0][i],
-		vectptr);
+	  // Process the dr status
+	  drStatus = static_cast<HPWH::DRMODES>(int(allSchedules[4][i]));
 
-    // Copy current status into the output file
-    if(HPWH_doTempDepress) {
-      airTemp2 = hpwh.getLocationTemp_C();
-    }
+	  // Change setpoint if there is a setpoint schedule. 
+	  if (!allSchedules[5].empty() && !hpwh.isSetpointFixed()) {
+		  hpwh.setSetpoint(allSchedules[5][i]); //expect this to fail sometimes
+	  }
 
-	strPreamble = std::to_string(i) + ", " + std::to_string(airTemp2) + ", " +
-		std::to_string(allSchedules[0][i]) + ", " + std::to_string(allSchedules[1][i]) + ", ";// +
-		//std::to_string(hpwh.getOutletTemp()) + ",";
-	hpwh.WriteCSVRow(outputFile, strPreamble.c_str(), nTestTCouples, 0);
+	  // Mix down for yearly tests with large compressors
+	  if (hpwh.getHPWHModel() >= 210 && minutesToRun > 500000.) {
+		  //Do a simple mix down of the draw for the cold water temperature
+		  if (hpwh.getSetpoint() <= 125.) {
+			  allSchedules[1][i] *= (125. - allSchedules[0][i]) / (hpwh.getTankNodeTemp(hpwh.getNumNodes() - 1, HPWH::UNITS_F) - allSchedules[0][i]);
+		  }
+	  }
+
+	  // Run the step
+	  hpwh.runOneStep(allSchedules[0][i], // Inlet water temperature (C)
+		  GAL_TO_L(allSchedules[1][i]), // Flow in gallons
+		  airTemp2,  // Ambient Temp (C)
+		  allSchedules[3][i],  // External Temp (C)
+		  drStatus, // DDR Status (now an enum. Fixed for now as allow)
+		  1. * GAL_TO_L(allSchedules[1][i]), allSchedules[0][i],
+		  vectptr);
+
+	  // Check energy balance accounting. 
+	  double hpwhElect = 0;
+	  for (int iHS = 0; iHS < hpwh.getNumHeatSources(); iHS++) {
+		  hpwhElect += hpwh.getNthHeatSourceEnergyInput(iHS, HPWH::UNITS_KJ);
+	  }
+	  double hpwhqHW = GAL_TO_L(allSchedules[1][i]) * (hpwh.getOutletTemp() - allSchedules[0][i]) 
+				* HPWH::DENSITYWATER_kgperL
+				* HPWH::CPWATER_kJperkgC;
+	  double hpwhqEnv = hpwh.getEnergyRemovedFromEnvironment(HPWH::UNITS_KJ);
+	  double hpwhqLoss = hpwh.getStandbyLosses(HPWH::UNITS_KJ);
+	  double deltaHC = hpwh.getTankHeatContent_kJ() - tankHCStart;
+	  double qBal = hpwhqEnv// HP energy extracted from surround
+		  - hpwhqLoss		// tank loss to environment
+		  + hpwhElect		// electricity in from heat sources
+		  - hpwhqHW			// hot water energy from flows in and out
+		  - deltaHC;		// change in tank stored energy
+
+	  double fBal = fabs(qBal) / std::max(tankHCStart, 1.);
+	  if (fBal > EBALTHRESHOLD){
+		  cout << "On minute " << i << " HPWH has an energy balance error " << qBal << "kJ, " << 100*fBal << "%"<< "\n";
+	  }
+
+	  // Recording
+	  if (minutesToRun < 500000.) {
+	  		// Copy current status into the output file
+	  		if (HPWH_doTempDepress) {
+	  			airTemp2 = hpwh.getLocationTemp_C();
+	  		}
+	  		strPreamble = std::to_string(i) + ", " + std::to_string(airTemp2) + ", " + std::to_string(hpwh.getSetpoint()) + ", " +
+	  			std::to_string(allSchedules[0][i]) + ", " + std::to_string(allSchedules[1][i]) + ", ";// +
+	  			//std::to_string(hpwh.getOutletTemp()) + ",";
+	  		hpwh.WriteCSVRow(outputFile, strPreamble.c_str(), nTestTCouples, 0);
+	  }
+	  else {
+	  		for (int iHS = 0; iHS < hpwh.getNumHeatSources(); iHS++) {
+	  			cumHeatIn[iHS] += hpwh.getNthHeatSourceEnergyInput(iHS, HPWH::UNITS_KWH)*1000.;
+	  			cumHeatOut[iHS] += hpwh.getNthHeatSourceEnergyOutput(iHS, HPWH::UNITS_KWH)*1000.;
+	  			//cout << "Now on minute: " << i << ", heat source" << iHS << ", cumulative input:"<< cumHeatIn[iHS] << "\n";
+	  		}
+	  }
   }
 
+  if (minutesToRun > 500000.) {
+	firstCol = input3 + "," + input1 + "," + input2;
+	fprintf(yearOutFile, "%s", firstCol.c_str());
+	double totalIn = 0, totalOut = 0;
+	for (int iHS = 0; iHS < 3; iHS++) {
+		fprintf(yearOutFile, ",%0.0f,%0.0f", cumHeatIn[iHS], cumHeatOut[iHS]);
+		totalIn += cumHeatIn[iHS];
+		totalOut += cumHeatOut[iHS];
+	}
+	fprintf(yearOutFile, ",%0.0f,%0.0f", totalIn, totalOut);
+	for (int iHS = 0; iHS < 3; iHS++) {
+		fprintf(yearOutFile, ",%0.2f", cumHeatOut[iHS] /cumHeatIn[iHS]);
+	}
+	fprintf(yearOutFile, ",%0.2f", totalOut/totalIn);
+	fprintf(yearOutFile, "\n");
+	fclose(yearOutFile);
+  }
+  else {
+	fclose(outputFile);
+  }
   controlFile.close();
-  fclose(outputFile);
 
   return 0;
 
@@ -308,57 +372,63 @@ int main(int argc, char *argv[])
 
 
 
-
-
-
-
 // this function reads the named schedule into the provided array
 int readSchedule(schedule &scheduleArray, string scheduleFileName, long minutesOfTest) {
-  long i, minuteTmp;
-  string line, snippet, s;
+  int minuteHrTmp;
+  bool hourInput;
+  string line, snippet, s, minORhr;
   double valTmp;
   ifstream inputFile(scheduleFileName.c_str());
   //open the schedule file provided
   cout << "Opening " << scheduleFileName << '\n';
 
   if(!inputFile.is_open()) {
-    cout << "Unable to open file" << '\n';
     return 1;
   }
 
   inputFile >> snippet >> valTmp;
+  // cout << "snippet " << snippet << " valTmp"<< valTmp<<'\n';
+
   if(snippet != "default") {
     cout << "First line of " << scheduleFileName << " must specify default\n";
     return 1;
   }
   // cout << valTmp << " minutes = " << minutesOfTest << "\n";
-  // cout << "size " << scheduleArray.size() << "\n";
+
   // Fill with the default value
-  for(i = 0; i < minutesOfTest; i++) {
-    scheduleArray.push_back(valTmp);
-    // scheduleArray[i] = valTmp;
-  }
+  scheduleArray.assign(minutesOfTest, valTmp);
 
   // Burn the first two lines
   std::getline(inputFile, line);
   std::getline(inputFile, line);
 
-  // Read all the exceptions
-  while(std::getline(inputFile, line)) {
-    std::stringstream ss(line); // Will parse with a stringstream
-
-    // Grab the first token, which is the minute
-    std::getline(ss, s, ',');
-    std::istringstream(s) >> minuteTmp;
-
-    // Grab the second token, which is the value
-    std::getline(ss, s, ',');
-    std::istringstream(s) >> valTmp;
-
-    // Update the value
-    scheduleArray[minuteTmp] = valTmp;
+  std::stringstream ss(line); // Will parse with a stringstream
+  // Grab the first token, which is the minute or hour marker
+  ss >> minORhr;
+  if (minORhr.empty() ) { // If nothing left in the file
+	  return 0;
   }
+  hourInput = tolower(minORhr.at(0)) == 'h';
+  char c; // to eat the commas nom nom
+  // Read all the exceptions to the default value
+  while (inputFile >> minuteHrTmp >> c >> valTmp) {
 
+		if (minuteHrTmp >= (int)scheduleArray.size()) {
+			cout << "In " << scheduleFileName << " the input file has more minutes than the test was defined with\n";
+			return 1;
+		}
+		// Update the value
+		if (!hourInput) {
+			scheduleArray[minuteHrTmp] = valTmp;
+		}
+		else if (hourInput) {
+			for (int j = minuteHrTmp * 60; j < (minuteHrTmp+1) * 60; j++) {
+				scheduleArray[j] = valTmp;
+				//cout << "minute " << j-(minuteHrTmp) * 60 << " of hour" << (minuteHrTmp)<<"\n";
+			}
+		}
+  }
+  
   //print out the whole schedule
 // if(DEBUG == 1){
 //   for(i = 0; (unsigned)i < scheduleArray.size(); i++){
